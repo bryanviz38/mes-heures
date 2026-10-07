@@ -1,344 +1,55 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mes Heures</title>
-
-<style>
-body {
-    font-family: Arial, sans-serif;
-    background: #f2f4f7;
-    margin: 0;
-    padding: 20px;
-}
-
-.container {
-    max-width: 600px;
-    margin: auto;
-    background: white;
-    padding: 20px;
-    border-radius: 15px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-}
-
-h1 {
-    text-align: center;
-}
-
-label {
-    display: block;
-    margin-top: 15px;
-    font-weight: bold;
-}
-
-input, select, button {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 12px;
-    margin-top: 6px;
-    border-radius: 8px;
-    border: 1px solid #ccc;
-    font-size: 16px;
-}
-
-button {
-    margin-top: 20px;
-    background: #2563eb;
-    color: white;
-    border: none;
-    cursor: pointer;
-}
-
-button:hover {
-    background: #1d4ed8;
-}
-
-.resultat {
-    margin-top: 20px;
-    padding: 15px;
-    background: #eef2ff;
-    border-radius: 10px;
-}
-
-.jour {
-    margin-top: 10px;
-    padding: 12px;
-    background: #f8fafc;
-    border-radius: 8px;
-    border: 1px solid #ddd;
-}
-
-.supprimer {
-    background: #dc2626;
-    margin-top: 10px;
-}
-
-.total {
-    font-size: 20px;
-    font-weight: bold;
-}
-</style>
-</head>
-
-<body>
-
-<div class="container">
-
-<h1>⏰ Mes Heures</h1>
-
-<label>Date</label>
-<input type="date" id="date">
-
-<label>Heure d'arrivée</label>
-<input type="time" id="arrivee" min="07:00" max="07:45">
-
-<label>Heure de départ</label>
-<input type="time" id="depart" min="14:30" max="16:30">
-
-<label>Pause</label>
-<select id="pause">
-    <option value="0">0 minute</option>
-    <option value="30">30 minutes</option>
-</select>
-
-<button onclick="enregistrer()">Enregistrer la journée</button>
-
-<div class="resultat">
-    <div>Heures de la journée : <strong id="duree">0 h 00</strong></div>
-    <div class="total">
-        Total semaine : <span id="totalSemaine">0 h 00</span>
-    </div>
-    <div>
-        Objectif : 35 h 00
-    </div>
-    <div>
-        Solde : <strong id="solde">0 h 00</strong>
-    </div>
-</div>
-
-<h2>Mes journées</h2>
-
-<div id="liste"></div>
-
-<button class="supprimer" onclick="toutSupprimer()">
-    Effacer toutes les journées
-</button>
-
-</div>
-
-<script>
-
-const STORAGE_KEY = "mes_heures";
-const OBJECTIF_SEMAINE = 35 * 60;
-
-let donnees = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-
-function minutesDepuisMinuit(heure) {
-    const [h, m] = heure.split(":").map(Number);
-    return h * 60 + m;
-}
-
-function formatMinutes(minutes) {
-
-    const signe = minutes < 0 ? "-" : "";
-    minutes = Math.abs(minutes);
-
-    const heures = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-
-    return `${signe}${heures} h ${String(mins).padStart(2, "0")}`;
-}
-
-function calculerDuree(arrivee, depart, pause) {
-
-    let debut = minutesDepuisMinuit(arrivee);
-    let fin = minutesDepuisMinuit(depart);
-
-    return fin - debut - Number(pause);
-}
-
-function calculerSemaine(dateString) {
-
-    const date = new Date(dateString + "T00:00:00");
-
-    const jour = date.getDay();
-
-    const difference = jour === 0 ? -6 : 1 - jour;
-
-    const lundi = new Date(date);
-    lundi.setDate(date.getDate() + difference);
-
-    let total = 0;
-
-    for (let i = 0; i < 7; i++) {
-
-        const d = new Date(lundi);
-        d.setDate(lundi.getDate() + i);
-
-        const cle = d.toISOString().split("T")[0];
-
-        if (donnees[cle]) {
-
-            total += calculerDuree(
-                donnees[cle].arrivee,
-                donnees[cle].depart,
-                donnees[cle].pause
-            );
-
-        }
-    }
-
-    return total;
-}
-
-function enregistrer() {
-
-    const date = document.getElementById("date").value;
-    const arrivee = document.getElementById("arrivee").value;
-    const depart = document.getElementById("depart").value;
-    const pause = document.getElementById("pause").value;
-
-    if (!date || !arrivee || !depart) {
-        alert("Merci de remplir tous les champs.");
-        return;
-    }
-
-    if (arrivee < "07:00" || arrivee > "07:45") {
-        alert("L'arrivée doit être entre 07:00 et 07:45.");
-        return;
-    }
-
-    if (depart < "14:30" || depart > "16:30") {
-        alert("Le départ doit être entre 14:30 et 16:30.");
-        return;
-    }
-
-    const duree = calculerDuree(arrivee, depart, pause);
-
-    if (duree <= 0) {
-        alert("Les horaires ne sont pas valides.");
-        return;
-    }
-
-    donnees[date] = {
-        arrivee,
-        depart,
-        pause
-    };
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(donnees));
-
-    afficher();
-
-    alert("Journée enregistrée !");
-}
-
-function supprimer(date) {
-
-    delete donnees[date];
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(donnees));
-
-    afficher();
-}
-
-function toutSupprimer() {
-
-    if (confirm("Voulez-vous vraiment tout supprimer ?")) {
-
-        donnees = {};
-
-        localStorage.removeItem(STORAGE_KEY);
-
-        afficher();
-    }
-}
-
-function afficher() {
-
-    const liste = document.getElementById("liste");
-
-    liste.innerHTML = "";
-
-    const dates = Object.keys(donnees).sort().reverse();
-
-    dates.forEach(date => {
-
-        const jour = donnees[date];
-
-        const duree = calculerDuree(
-            jour.arrivee,
-            jour.depart,
-            jour.pause
-        );
-
-        const div = document.createElement("div");
-
-        div.className = "jour";
-
-        div.innerHTML = `
-            <strong>${date}</strong><br>
-            Arrivée : ${jour.arrivee}<br>
-            Départ : ${jour.depart}<br>
-            Pause : ${jour.pause} min<br>
-            Durée : <strong>${formatMinutes(duree)}</strong>
-            <button class="supprimer" onclick="supprimer('${date}')">
-                Supprimer
-            </button>
-        `;
-
-        liste.appendChild(div);
-    });
-
-    const dateActuelle =
-        document.getElementById("date").value ||
-        new Date().toISOString().split("T")[0];
-
-    const total = calculerSemaine(dateActuelle);
-
-    document.getElementById("totalSemaine").textContent =
-        formatMinutes(total);
-
-    document.getElementById("solde").textContent =
-        formatMinutes(total - OBJECTIF_SEMAINE);
-
-    const arrivee = document.getElementById("arrivee").value;
-    const depart = document.getElementById("depart").value;
-    const pause = document.getElementById("pause").value;
-
-    if (arrivee && depart) {
-
-        const duree = calculerDuree(arrivee, depart, pause);
-
-        document.getElementById("duree").textContent =
-            formatMinutes(duree);
-
-    } else {
-
-        document.getElementById("duree").textContent =
-            "0 h 00";
-    }
-}
-
-document.getElementById("date").value =
-    new Date().toISOString().split("T")[0];
-
-document
-    .getElementById("arrivee")
-    .addEventListener("change", afficher);
-
-document
-    .getElementById("depart")
-    .addEventListener("change", afficher);
-
-document
-    .getElementById("pause")
-    .addEventListener("change", afficher);
-
-afficher();
-
-</script>
-
-</body>
-</html>
+bryanviz38
+mes-heures
+Public
+
+tT
+bryanviz38
+bryanviz38
+Add files via upload
+47cd501
+ · 
+26 minutes ago
+Name	Last commit message
+	Last commit date
+index.html
+	
+Add files via upload
+	
+26 minutes ago
+Repository files navigation
+
+    README
+
+Add a README
+
+Help people interested in this repository understand your project.
+About
+No description, website, or topics provided.
+Activity
+Stars
+0 stars
+Watchers
+0 watching
+Forks
+0 forks
+Releases
+No releases published
+Create a new release
+Deployments
+1 (1)
+
+    github-pages
+    24 minutes ago
+
+Packages
+No packages published
+Publish your first package
+Contributors
+1 (1)
+
+    @bryanviz38
+    bryanviz38
+
+Languages
+
+    HTML100%
