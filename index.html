@@ -1,55 +1,969 @@
-bryanviz38
-mes-heures
-Public
+```html
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mes Heures</title>
 
-tT
-bryanviz38
-bryanviz38
-Add files via upload
-47cd501
- · 
-26 minutes ago
-Name	Last commit message
-	Last commit date
-index.html
-	
-Add files via upload
-	
-26 minutes ago
-Repository files navigation
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-    README
+<style>
+* { box-sizing: border-box; }
 
-Add a README
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f4f6f8;
+  color: #222;
+}
 
-Help people interested in this repository understand your project.
-About
-No description, website, or topics provided.
-Activity
-Stars
-0 stars
-Watchers
-0 watching
-Forks
-0 forks
-Releases
-No releases published
-Create a new release
-Deployments
-1 (1)
+.container {
+  max-width: 700px;
+  margin: auto;
+  padding: 20px;
+}
 
-    github-pages
-    24 minutes ago
+h1 {
+  text-align: center;
+}
 
-Packages
-No packages published
-Publish your first package
-Contributors
-1 (1)
+.card {
+  background: white;
+  padding: 20px;
+  margin-bottom: 18px;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
 
-    @bryanviz38
-    bryanviz38
+label {
+  display: block;
+  margin-top: 12px;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
 
-Languages
+input, select, button {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  font-size: 16px;
+}
 
-    HTML100%
+button {
+  border: none;
+  background: #222;
+  color: white;
+  cursor: pointer;
+  margin-top: 15px;
+}
+
+.danger {
+  background: #c62828;
+}
+
+.success {
+  color: #16803c;
+  font-weight: bold;
+}
+
+.error {
+  color: #c62828;
+  font-weight: bold;
+}
+
+.hidden {
+  display: none;
+}
+
+.day {
+  border-top: 1px solid #ddd;
+  padding: 14px 0;
+}
+
+.day:first-child {
+  border-top: none;
+}
+
+.total {
+  font-size: 20px;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+.balance-positive {
+  color: #16803c;
+  font-weight: bold;
+}
+
+.balance-negative {
+  color: #c62828;
+  font-weight: bold;
+}
+
+.small {
+  font-size: 14px;
+  color: #666;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>⏰ Mes Heures</h1>
+
+<!-- CONNEXION -->
+
+<div class="card" id="loginCard">
+
+<h2>Connexion</h2>
+
+<label>Email</label>
+<input type="email" id="email" placeholder="Ton email">
+
+<label>Mot de passe</label>
+<input type="password" id="password" placeholder="Ton mot de passe">
+
+<button onclick="connexion()">Se connecter</button>
+
+<button onclick="inscription()">Créer mon compte</button>
+
+<p id="authMessage"></p>
+
+</div>
+
+
+<!-- APPLICATION -->
+
+<div id="app" class="hidden">
+
+<div class="card">
+
+Connecté avec :
+<strong id="userEmail"></strong>
+
+<button onclick="deconnexion()">Se déconnecter</button>
+
+</div>
+
+
+<div class="card">
+
+<h2>Ajouter une journée</h2>
+
+<label>Date</label>
+<input type="date" id="date">
+
+<label>Arrivée</label>
+<input type="time" id="arrivee" min="07:00" max="07:45">
+
+<label>Départ</label>
+<input type="time" id="depart" min="14:30" max="16:30">
+
+<label>Pause</label>
+
+<select id="pause">
+<option value="0">0 minute</option>
+<option value="30">30 minutes</option>
+</select>
+
+<button onclick="ajouterJournee()">
+Ajouter la journée
+</button>
+
+<p id="message"></p>
+
+</div>
+
+
+<div class="card">
+
+<h2>Cette semaine</h2>
+
+<div class="total" id="totalSemaine">
+0 h 00
+</div>
+
+<div>
+Objectif : 35 h
+</div>
+
+<div id="balance"></div>
+
+</div>
+
+
+<div class="card">
+
+<h2>Mes journées</h2>
+
+<div id="liste"></div>
+
+<button class="danger" onclick="supprimerTout()">
+Supprimer toutes les journées
+</button>
+
+</div>
+
+</div>
+
+</div>
+
+
+<script>
+
+/* =========================
+SUPABASE
+========================= */
+
+const SUPABASE_URL =
+"https://qgexcorkzcmazncvxmpm.supabase.co";
+
+const SUPABASE_KEY =
+"sb_publishable_zYYJBx7H2scOSMEhouMaUg_N5pwAAB6";
+
+const supabaseClient =
+window.supabase.createClient(
+SUPABASE_URL,
+SUPABASE_KEY
+);
+
+
+/* =========================
+VARIABLES
+========================= */
+
+const OBJECTIF_HEBDO = 35 * 60;
+
+let heures = [];
+
+
+/* =========================
+DEMARRAGE
+========================= */
+
+async function initialiser() {
+
+const resultat =
+await supabaseClient.auth.getSession();
+
+const session =
+resultat.data.session;
+
+if (session) {
+
+afficherApplication(session.user);
+
+await chargerHeures();
+
+}
+
+document.getElementById("date").value =
+new Date().toISOString().split("T")[0];
+
+
+supabaseClient.auth.onAuthStateChange(
+async function(event, session) {
+
+if (session) {
+
+afficherApplication(session.user);
+
+await chargerHeures();
+
+} else {
+
+document
+.getElementById("loginCard")
+.classList.remove("hidden");
+
+document
+.getElementById("app")
+.classList.add("hidden");
+
+}
+
+});
+
+}
+
+
+/* =========================
+AFFICHER APPLICATION
+========================= */
+
+function afficherApplication(user) {
+
+document
+.getElementById("loginCard")
+.classList.add("hidden");
+
+document
+.getElementById("app")
+.classList.remove("hidden");
+
+document
+.getElementById("userEmail")
+.textContent = user.email || "";
+
+}
+
+
+/* =========================
+INSCRIPTION
+========================= */
+
+async function inscription() {
+
+const email =
+document.getElementById("email").value.trim();
+
+const password =
+document.getElementById("password").value;
+
+if (!email || !password) {
+
+afficherAuthMessage(
+"Entre ton email et ton mot de passe.",
+true
+);
+
+return;
+
+}
+
+const resultat =
+await supabaseClient.auth.signUp({
+email: email,
+password: password
+});
+
+if (resultat.error) {
+
+afficherAuthMessage(
+resultat.error.message,
+true
+);
+
+return;
+
+}
+
+afficherAuthMessage(
+"Compte créé ! Vérifie ton email si nécessaire.",
+false
+);
+
+}
+
+
+/* =========================
+CONNEXION
+========================= */
+
+async function connexion() {
+
+const email =
+document.getElementById("email").value.trim();
+
+const password =
+document.getElementById("password").value;
+
+if (!email || !password) {
+
+afficherAuthMessage(
+"Entre ton email et ton mot de passe.",
+true
+);
+
+return;
+
+}
+
+const resultat =
+await supabaseClient.auth.signInWithPassword({
+email: email,
+password: password
+});
+
+if (resultat.error) {
+
+afficherAuthMessage(
+resultat.error.message,
+true
+);
+
+return;
+
+}
+
+afficherAuthMessage(
+"Connexion réussie.",
+false
+);
+
+}
+
+
+/* =========================
+DECONNEXION
+========================= */
+
+async function deconnexion() {
+
+await supabaseClient.auth.signOut();
+
+heures = [];
+
+afficherListe();
+
+calculerSemaine();
+
+}
+
+
+/* =========================
+CHARGER LES HEURES
+========================= */
+
+async function chargerHeures() {
+
+const resultatUser =
+await supabaseClient.auth.getUser();
+
+const user =
+resultatUser.data.user;
+
+if (!user) return;
+
+const resultat =
+await supabaseClient
+.from("heures")
+.select("*")
+.eq("user_id", user.id)
+.order("date", {ascending:false});
+
+if (resultat.error) {
+
+afficherMessage(
+"Erreur de chargement : " +
+resultat.error.message,
+true
+);
+
+return;
+
+}
+
+heures =
+resultat.data || [];
+
+afficherListe();
+
+calculerSemaine();
+
+}
+
+
+/* =========================
+AJOUT JOURNEE
+========================= */
+
+async function ajouterJournee() {
+
+const date =
+document.getElementById("date").value;
+
+const arrivee =
+document.getElementById("arrivee").value;
+
+const depart =
+document.getElementById("depart").value;
+
+const pause =
+Number(document.getElementById("pause").value);
+
+
+if (!date || !arrivee || !depart) {
+
+afficherMessage(
+"Remplis tous les champs.",
+true
+);
+
+return;
+
+}
+
+
+if (arrivee < "07:00" || arrivee > "07:45") {
+
+afficherMessage(
+"L'arrivée doit être entre 07:00 et 07:45.",
+true
+);
+
+return;
+
+}
+
+
+if (depart < "14:30" || depart > "16:30") {
+
+afficherMessage(
+"Le départ doit être entre 14:30 et 16:30.",
+true
+);
+
+return;
+
+}
+
+
+if (depart <= arrivee) {
+
+afficherMessage(
+"Le départ doit être après l'arrivée.",
+true
+);
+
+return;
+
+}
+
+
+const resultatUser =
+await supabaseClient.auth.getUser();
+
+const user =
+resultatUser.data.user;
+
+if (!user) {
+
+afficherMessage(
+"Tu dois être connecté.",
+true
+);
+
+return;
+
+}
+
+
+const ligne = {
+
+user_id: user.id,
+
+date: date,
+
+arrivee: arrivee,
+
+depart: depart,
+
+pause: pause
+
+};
+
+
+const resultat =
+await supabaseClient
+.from("heures")
+.upsert(ligne, {
+onConflict: "user_id,date"
+});
+
+
+if (resultat.error) {
+
+afficherMessage(
+"Erreur : " +
+resultat.error.message,
+true
+);
+
+return;
+
+}
+
+
+afficherMessage(
+"Journée enregistrée et synchronisée !",
+false
+);
+
+await chargerHeures();
+
+}
+
+
+/* =========================
+CALCUL
+========================= */
+
+function dureeMinutes(
+arrivee,
+depart,
+pause
+) {
+
+const a =
+arrivee.split(":").map(Number);
+
+const d =
+depart.split(":").map(Number);
+
+return (
+(d[0] * 60 + d[1]) -
+(a[0] * 60 + a[1]) -
+Number(pause || 0)
+);
+
+}
+
+
+function formatMinutes(minutes) {
+
+const signe =
+minutes < 0 ? "-" : "";
+
+minutes =
+Math.abs(minutes);
+
+const heures =
+Math.floor(minutes / 60);
+
+const minutesRestantes =
+minutes % 60;
+
+return (
+signe +
+heures +
+" h " +
+String(minutesRestantes).padStart(2,"0")
+);
+
+}
+
+
+/* =========================
+LUNDI
+========================= */
+
+function getLundi(date) {
+
+const d =
+new Date(date);
+
+const jour =
+d.getDay();
+
+const difference =
+jour === 0 ? -6 : 1 - jour;
+
+d.setDate(
+d.getDate() + difference
+);
+
+d.setHours(0,0,0,0);
+
+return d;
+
+}
+
+
+/* =========================
+CALCUL SEMAINE
+========================= */
+
+function calculerSemaine() {
+
+const maintenant =
+new Date();
+
+const lundi =
+getLundi(maintenant);
+
+const dimanche =
+new Date(lundi);
+
+dimanche.setDate(
+dimanche.getDate() + 7
+);
+
+let total = 0;
+
+
+heures.forEach(function(h) {
+
+const date =
+new Date(h.date + "T00:00:00");
+
+if (
+date >= lundi &&
+date < dimanche
+) {
+
+total += dureeMinutes(
+h.arrivee,
+h.depart,
+h.pause
+);
+
+}
+
+});
+
+
+document
+.getElementById("totalSemaine")
+.textContent =
+formatMinutes(total);
+
+
+const balance =
+total - OBJECTIF_HEBDO;
+
+const element =
+document.getElementById("balance");
+
+if (balance >= 0) {
+
+element.className =
+"balance-positive";
+
+element.textContent =
+"Balance : +" +
+formatMinutes(balance);
+
+} else {
+
+element.className =
+"balance-negative";
+
+element.textContent =
+"Balance : " +
+formatMinutes(balance);
+
+}
+
+}
+
+
+/* =========================
+AFFICHER JOURNEES
+========================= */
+
+function afficherListe() {
+
+const liste =
+document.getElementById("liste");
+
+liste.innerHTML = "";
+
+
+if (heures.length === 0) {
+
+liste.innerHTML =
+'<p class="small">Aucune journée enregistrée.</p>';
+
+return;
+
+}
+
+
+heures.forEach(function(h) {
+
+const div =
+document.createElement("div");
+
+div.className = "day";
+
+const duree =
+dureeMinutes(
+h.arrivee,
+h.depart,
+h.pause
+);
+
+const dateAffichee =
+new Date(
+h.date + "T00:00:00"
+).toLocaleDateString(
+"fr-FR",
+{
+weekday:"long",
+day:"2-digit",
+month:"2-digit",
+year:"numeric"
+}
+);
+
+div.innerHTML = `
+
+<strong>${dateAffichee}</strong>
+
+<br>
+
+${h.arrivee} → ${h.depart}
+
+<br>
+
+<span class="small">
+Pause : ${h.pause} min
+</span>
+
+<br>
+
+<strong>
+${formatMinutes(duree)}
+</strong>
+
+<button
+class="danger"
+onclick="supprimerJournee('${h.id}')">
+
+Supprimer
+
+</button>
+
+`;
+
+liste.appendChild(div);
+
+});
+
+}
+
+
+/* =========================
+SUPPRIMER
+========================= */
+
+async function supprimerJournee(id) {
+
+if (!confirm("Supprimer cette journée ?")) {
+return;
+}
+
+const resultat =
+await supabaseClient
+.from("heures")
+.delete()
+.eq("id", id);
+
+if (resultat.error) {
+
+afficherMessage(
+"Erreur : " +
+resultat.error.message,
+true
+);
+
+return;
+
+}
+
+await chargerHeures();
+
+}
+
+
+/* =========================
+SUPPRIMER TOUT
+========================= */
+
+async function supprimerTout() {
+
+if (!confirm(
+"Supprimer toutes les journées ?"
+)) {
+return;
+}
+
+const resultatUser =
+await supabaseClient.auth.getUser();
+
+const user =
+resultatUser.data.user;
+
+if (!user) return;
+
+const resultat =
+await supabaseClient
+.from("heures")
+.delete()
+.eq("user_id", user.id);
+
+if (resultat.error) {
+
+afficherMessage(
+"Erreur : " +
+resultat.error.message,
+true
+);
+
+return;
+
+}
+
+heures = [];
+
+afficherListe();
+
+calculerSemaine();
+
+}
+
+
+/* =========================
+MESSAGES
+========================= */
+
+function afficherMessage(
+message,
+erreur
+) {
+
+const element =
+document.getElementById("message");
+
+element.textContent =
+message;
+
+element.className =
+erreur ? "error" : "success";
+
+}
+
+
+function afficherAuthMessage(
+message,
+erreur
+) {
+
+const element =
+document.getElementById("authMessage");
+
+element.textContent =
+message;
+
+element.className =
+erreur ? "error" : "success";
+
+}
+
+
+/* =========================
+LANCEMENT
+========================= */
+
+initialiser();
+
+</script>
+
+</body>
+</html>
+```
